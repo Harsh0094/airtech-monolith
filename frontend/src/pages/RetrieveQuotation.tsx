@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Search,
@@ -7,11 +6,11 @@ import {
   Download,
   Eye,
   AlertCircle,
-  CalendarDays,
-  UserRound,
   IndianRupee,
   X,
   Mail,
+  Layers,
+  ListFilter,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -85,6 +84,15 @@ const STATUSES = [
   'Expired',
 ]
 
+const STATUS_STYLES: Record<string, string> = {
+  draft: 'bg-slate-100 text-slate-700 ring-slate-200',
+  sent: 'bg-blue-50 text-blue-700 ring-blue-200',
+  pending: 'bg-amber-50 text-amber-800 ring-amber-200',
+  approved: 'bg-green-50 text-green-700 ring-green-200',
+  rejected: 'bg-red-50 text-red-700 ring-red-200',
+  expired: 'bg-orange-50 text-orange-700 ring-orange-200',
+}
+
 function formatCurrency(value?: number) {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -131,6 +139,60 @@ function normalizeQuotation(raw: Record<string, unknown>): Quotation {
       ? (raw.items as QuotationItem[])
       : [],
   }
+}
+
+/* ---------- presentational helpers ---------- */
+
+function StatusBadge({ status }: { status?: string }) {
+  const label = status || 'Draft'
+  const style = STATUS_STYLES[label.toLowerCase()] ?? STATUS_STYLES.draft
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${style}`}
+    >
+      {label}
+    </span>
+  )
+}
+
+function StatCard({
+  label,
+  icon,
+  children,
+}: {
+  label: string
+  icon: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm text-slate-500">{label}</p>
+        <p className="truncate text-xl font-bold tabular-nums text-slate-900">
+          {children}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function SkeletonRows() {
+  return (
+    <div aria-busy="true" aria-label="Loading quotations" className="divide-y divide-slate-100">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-4 px-4 py-4">
+          <div className="h-4 w-28 animate-pulse rounded bg-slate-200" />
+          <div className="h-4 flex-1 animate-pulse rounded bg-slate-100" />
+          <div className="hidden h-4 w-24 animate-pulse rounded bg-slate-100 md:block" />
+          <div className="hidden h-4 w-20 animate-pulse rounded bg-slate-100 md:block" />
+          <div className="h-8 w-40 animate-pulse rounded bg-slate-100" />
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function RetrieveQuotation() {
@@ -294,6 +356,81 @@ function RetrieveQuotation() {
     }
   }
 
+  async function sendMailDraft(quotation: Quotation) {
+    const email = quotation.customer_email?.trim()
+
+    if (!email) {
+      window.alert(
+        'This quotation has no customer email address. Please add one first.',
+      )
+      return
+    }
+
+    const contactName =
+      quotation.contact_person?.trim() ||
+      quotation.customer_name?.trim() ||
+      'Customer'
+
+    const categoryName =
+      quotation.category === 'Airtime/Frequency'
+        ? 'Airtime'
+        : quotation.category?.trim() || 'Quotation'
+
+    const companyName =
+      quotation.customer_company?.trim() ||
+      quotation.customer_name?.trim() ||
+      'Customer'
+
+    const subject = `${categoryName} Quotation - ${companyName} - ${quotation.quotation_number} | Airtech Solutions India Pvt. Ltd.`
+
+    const body = `Dear ${contactName},
+
+Greetings from Airtech Solutions India Pvt. Ltd.
+
+Please find the quotation ${quotation.quotation_number} for your review and consideration.
+
+Should you require any clarification or additional information, please feel free to contact us. We will be happy to assist you.
+
+Thank you for your time and consideration. We look forward to hearing from you.
+
+Best regards,
+Airtech Solutions India Pvt. Ltd.`
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/outlook/draft', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          quotation_id: quotation.quotation_id || quotation.id,
+          recipient: email,
+          subject,
+          body,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          result.detail || 'Could not open the Outlook draft.',
+        )
+      }
+
+      window.alert(
+        'Outlook draft requested successfully. Please review the email and attached quotation PDF before sending.',
+      )
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'An unexpected error occurred.'
+
+      window.alert(`Could not create the Outlook draft: ${message}`)
+    }
+  }
+
   function clearFilters() {
     setSearch('')
     setCategory('')
@@ -302,18 +439,59 @@ function RetrieveQuotation() {
     setDateTo('')
   }
 
+  const hasFilters = Boolean(
+    search.trim() || category || status || dateFrom || dateTo,
+  )
+
   const inputClass =
-    'h-10 w-full rounded-lg border border-slate-200 bg-white text-slate-800'
+    'h-10 w-full rounded-lg border border-slate-200 bg-white text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40'
+
+  const rowActions = (quotation: Quotation) => (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => viewQuotation(quotation)}
+        title="View quotation PDF"
+      >
+        <Eye className="mr-1.5 h-4 w-4" />
+        View
+      </Button>
+
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => void sendMailDraft(quotation)}
+        title="Create Outlook draft with quotation PDF"
+      >
+        <Mail className="mr-1.5 h-4 w-4" />
+        Email
+      </Button>
+
+      <Button
+        type="button"
+        size="sm"
+        onClick={() => void downloadPdf(quotation)}
+        disabled={downloadingId === quotation.id}
+        title="Download quotation PDF"
+      >
+        <Download className="mr-1.5 h-4 w-4" />
+        {downloadingId === quotation.id ? 'Preparing…' : 'PDF'}
+      </Button>
+    </div>
+  )
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">
-            Retrieve Quotation
+            Saved quotations
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Find saved quotations, review their values and download PDFs.
+            Search, preview, email or download any quotation you have saved.
           </p>
         </div>
 
@@ -327,81 +505,83 @@ function RetrieveQuotation() {
           <RefreshCw
             className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
           />
-          Refresh
+          {loading ? 'Refreshing…' : 'Refresh'}
         </Button>
       </div>
 
       {error && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
+          <span className="flex-1">{error}</span>
+          <button
+            type="button"
+            onClick={() => setError('')}
+            aria-label="Dismiss error"
+            className="rounded p-0.5 text-red-500 hover:bg-red-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-sm text-slate-500">Matching quotations</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {loading ? '—' : filteredQuotations.length}
-          </p>
-        </div>
+        <StatCard label="Matching quotations" icon={<FileText className="h-5 w-5" />}>
+          {loading ? '—' : filteredQuotations.length}
+        </StatCard>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="flex items-center gap-1 text-sm text-slate-500">
-            <IndianRupee className="h-4 w-4" />
-            Total quotation value
-          </p>
-          <p className="mt-2 text-xl font-bold text-slate-900">
-            {loading
-              ? '—'
-              : formatCurrency(
-                filteredQuotations.reduce(
-                  (sum, item) => sum + Number(item.total ?? 0),
-                  0,
-                ),
-              )}
-          </p>
-        </div>
+        <StatCard label="Total value" icon={<IndianRupee className="h-5 w-5" />}>
+          {loading
+            ? '—'
+            : formatCurrency(
+              filteredQuotations.reduce(
+                (sum, item) => sum + Number(item.total ?? 0),
+                0,
+              ),
+            )}
+        </StatCard>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-sm text-slate-500">Categories represented</p>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {
-              new Set(
-                filteredQuotations.map((item) => item.category),
-              ).size
-            }
-          </p>
-        </div>
+        <StatCard label="Categories" icon={<Layers className="h-5 w-5" />}>
+          {loading
+            ? '—'
+            : new Set(filteredQuotations.map((item) => item.category)).size}
+        </StatCard>
       </div>
 
-      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="flex items-center gap-2 font-semibold text-slate-800">
-          <Search className="h-4 w-4" />
-          Search and filters
-        </h3>
-
+      <section
+        aria-label="Search and filters"
+        className="space-y-4 rounded-xl border border-slate-200 bg-white p-4"
+      >
         <div className="relative">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Type quotation number or customer name..."
+            placeholder="Search by quotation number, customer, contact or email"
             aria-label="Search quotations"
-            className={`${inputClass} pl-9`}
+            className={`${inputClass} pl-9 pr-9`}
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="space-y-1 text-sm text-slate-600">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="space-y-1 text-sm font-medium text-slate-600">
             Category
             <select
               value={category}
               onChange={(event) => setCategory(event.target.value)}
-              className={inputClass}
+              className={`${inputClass} px-3 font-normal`}
             >
               <option value="">All categories</option>
               {CATEGORIES.map((item) => (
@@ -412,12 +592,12 @@ function RetrieveQuotation() {
             </select>
           </label>
 
-          <label className="space-y-1 text-sm text-slate-600">
+          <label className="space-y-1 text-sm font-medium text-slate-600">
             Status
             <select
               value={status}
               onChange={(event) => setStatus(event.target.value)}
-              className={inputClass}
+              className={`${inputClass} px-3 font-normal`}
             >
               <option value="">All statuses</option>
               {STATUSES.map((item) => (
@@ -428,181 +608,186 @@ function RetrieveQuotation() {
             </select>
           </label>
 
-          <label className="space-y-1 text-sm text-slate-600">
+          <label className="space-y-1 text-sm font-medium text-slate-600">
             From date
             <Input
               type="date"
               value={dateFrom}
               max={dateTo || undefined}
               onChange={(event) => setDateFrom(event.target.value)}
-              className={inputClass}
+              className={`${inputClass} font-normal`}
             />
           </label>
 
-          <label className="space-y-1 text-sm text-slate-600">
+          <label className="space-y-1 text-sm font-medium text-slate-600">
             To date
             <Input
               type="date"
               min={dateFrom || undefined}
               value={dateTo}
               onChange={(event) => setDateTo(event.target.value)}
-              className={inputClass}
+              className={`${inputClass} font-normal`}
             />
           </label>
         </div>
 
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={clearFilters}
-            className="gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Clear filters
-          </Button>
-        </div>
+        {hasFilters && (
+          <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+            <p className="flex items-center gap-2 text-sm text-slate-500">
+              <ListFilter className="h-4 w-4" />
+              Showing {filteredQuotations.length} of {quotations.length}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="gap-1.5 text-blue-700 hover:text-blue-800"
+            >
+              <X className="h-4 w-4" />
+              Clear filters
+            </Button>
+          </div>
+        )}
       </section>
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="flex items-center gap-2 font-semibold text-slate-800">
-            <CalendarDays className="h-4 w-4" />
-            Saved quotation register
-          </h3>
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <h3 className="font-semibold text-slate-800">Quotation register</h3>
           <span className="text-sm text-slate-500">
-            {filteredQuotations.length} records
+            {loading ? 'Loading…' : `${filteredQuotations.length} records`}
           </span>
         </div>
 
         {loading ? (
-          <p className="p-10 text-center text-sm text-slate-500">
-            Loading saved quotations...
-          </p>
+          <SkeletonRows />
         ) : filteredQuotations.length === 0 ? (
           <div className="p-10 text-center">
             <FileText className="mx-auto h-9 w-9 text-slate-300" />
             <p className="mt-3 font-semibold text-slate-700">
-              No saved quotations found
+              {quotations.length === 0
+                ? 'No saved quotations yet'
+                : 'No quotations match your filters'}
             </p>
             <p className="mt-1 text-sm text-slate-500">
-              Try a different search or select All categories.
+              {quotations.length === 0
+                ? 'Quotations you create and save will appear here.'
+                : 'Try a different search term or clear the filters.'}
             </p>
+            {hasFilters && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={clearFilters}
+                className="mt-4"
+              >
+                Clear filters
+              </Button>
+            )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600">
-                <tr>
-                  {[
-                    'Quotation number',
-                    'Customer',
-                    'Category',
-                    'Date',
-                    'Total',
-                    'Status',
-                    'Action',
-                  ].map((heading) => (
-                    <th
-                      key={heading}
-                      className="border-b border-slate-200 px-4 py-3 font-medium"
-                    >
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-                {filteredQuotations.map((quotation) => (
-                  <tr
-                    key={quotation.id}
-                    className="transition-colors hover:bg-slate-50"
-                  >
-                    <td className="whitespace-nowrap px-4 py-4 font-semibold text-blue-700">
-                      {quotation.quotation_number || '—'}
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <div className="flex items-start gap-2">
-                        <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                        <div>
-                          <p className="font-medium text-slate-800">
-                            {quotation.customer_name || '—'}
-                          </p>
-                          {quotation.customer_company && (
-                            <p className="mt-1 text-xs text-slate-500">
-                              {quotation.customer_company}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="whitespace-nowrap px-4 py-4">
-                      {quotation.category || '—'}
-                    </td>
-
-                    <td className="whitespace-nowrap px-4 py-4">
-                      {formatDate(quotation.quotation_date)}
-                    </td>
-
-                    <td className="whitespace-nowrap px-4 py-4 font-semibold">
-                      {formatCurrency(quotation.total)}
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                        {quotation.status || 'Draft'}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => viewQuotation(quotation)}
-                          title="View quotation PDF"
-                        >
-                          <Eye className="mr-1 h-4 w-4" />
-                          View
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            window.alert(
-                              'Send Mail button is ready. Outlook integration will be added in the next step.',
-                            )
-                          }}
-                          title="Send quotation by email"
-                        >
-                          <Mail className="mr-1 h-4 w-4" />
-                          Send Mail
-                        </Button>
-
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => void downloadPdf(quotation)}
-                          disabled={downloadingId === quotation.id}
-                          title="Download quotation PDF"
-                        >
-                          <Download className="mr-1 h-4 w-4" />
-                          {downloadingId === quotation.id
-                            ? 'Preparing...'
-                            : 'PDF'}
-                        </Button>
-                      </div>
-                    </td>
+          <>
+            {/* Table on larger screens */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[850px] text-left text-sm">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    {[
+                      'Quotation',
+                      'Customer',
+                      'Category',
+                      'Date',
+                      'Total',
+                      'Status',
+                      'Actions',
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        className={`border-b border-slate-200 px-4 py-3 font-medium ${
+                          heading === 'Total' ? 'text-right' : ''
+                        }`}
+                      >
+                        {heading}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {filteredQuotations.map((quotation) => (
+                    <tr
+                      key={quotation.id}
+                      className="transition-colors hover:bg-slate-50"
+                    >
+                      <td className="whitespace-nowrap px-4 py-3.5 font-semibold text-blue-700">
+                        {quotation.quotation_number || '—'}
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <p className="font-medium text-slate-800">
+                          {quotation.customer_name || '—'}
+                        </p>
+                        {quotation.contact_person && (
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {quotation.contact_person}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3.5 text-slate-700">
+                        {quotation.category || '—'}
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3.5 text-slate-700">
+                        {formatDate(quotation.quotation_date)}
+                      </td>
+
+                      <td className="whitespace-nowrap px-4 py-3.5 text-right font-semibold tabular-nums">
+                        {formatCurrency(quotation.total)}
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <StatusBadge status={quotation.status} />
+                      </td>
+
+                      <td className="px-4 py-3.5">{rowActions(quotation)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Cards on small screens */}
+            <ul className="divide-y divide-slate-100 md:hidden">
+              {filteredQuotations.map((quotation) => (
+                <li key={quotation.id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-blue-700">
+                        {quotation.quotation_number || '—'}
+                      </p>
+                      <p className="truncate font-medium text-slate-800">
+                        {quotation.customer_name || '—'}
+                      </p>
+                    </div>
+                    <StatusBadge status={quotation.status} />
+                  </div>
+                  <div className="flex items-end justify-between gap-3 text-sm text-slate-500">
+                    <p>
+                      {quotation.category || '—'}
+                      <br />
+                      {formatDate(quotation.quotation_date)}
+                    </p>
+                    <p className="text-lg font-semibold tabular-nums text-slate-900">
+                      {formatCurrency(quotation.total)}
+                    </p>
+                  </div>
+                  {rowActions(quotation)}
+                </li>
+              ))}
+            </ul>
+          </>
         )}
 
         <div className="border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
@@ -610,41 +795,62 @@ function RetrieveQuotation() {
         </div>
       </section>
 
-      {/* Simple PDF preview modal */}
+      {/* PDF preview modal */}
       {pdfQuotation && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-3"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-3"
           onClick={() => setPdfQuotation(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Quotation PDF preview"
-            className="relative h-[90vh] w-full max-w-5xl overflow-hidden rounded-lg bg-white shadow-xl"
+            className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setPdfQuotation(null)}
-              aria-label="Close PDF preview"
-              className="absolute right-3 top-3 z-10 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow hover:bg-slate-100"
-            >
-              Done ✕
-            </button>
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-slate-900">
+                  {pdfQuotation.quotation_number}
+                </p>
+                <p className="truncate text-xs text-slate-500">
+                  {pdfQuotation.customer_name}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void downloadPdf(pdfQuotation)}
+                  disabled={downloadingId === pdfQuotation.id}
+                >
+                  <Download className="mr-1.5 h-4 w-4" />
+                  {downloadingId === pdfQuotation.id ? 'Preparing…' : 'Download'}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setPdfQuotation(null)}
+                  aria-label="Close PDF preview"
+                >
+                  <X className="mr-1.5 h-4 w-4" />
+                  Close
+                </Button>
+              </div>
+            </div>
 
             <iframe
               key={pdfUrl}
               title={`Quotation ${pdfQuotation.quotation_number}`}
               src={pdfUrl}
-              className="h-full w-full border-0"
+              className="w-full flex-1 border-0 bg-slate-100"
             />
           </div>
         </div>
       )}
 
-
-
-      {/* Existing quotation details modal */}
+      {/* Quotation details modal */}
       {selected && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
@@ -657,7 +863,7 @@ function RetrieveQuotation() {
             className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between border-b border-slate-200 p-5">
+            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white p-5">
               <div>
                 <h3
                   id="quotation-detail-title"
@@ -665,9 +871,9 @@ function RetrieveQuotation() {
                 >
                   {selected.quotation_number}
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Saved quotation details
-                </p>
+                <div className="mt-1.5">
+                  <StatusBadge status={selected.status} />
+                </div>
               </div>
 
               <Button
@@ -712,7 +918,6 @@ function RetrieveQuotation() {
                 />
                 <Detail label="Site name" value={selected.site_name} />
                 <Detail label="Site address" value={selected.site_address} />
-                <Detail label="Status" value={selected.status} />
               </div>
 
               {selected.customer_address && (
@@ -752,11 +957,11 @@ function RetrieveQuotation() {
                   <table className="w-full min-w-[600px] text-left text-sm">
                     <thead className="bg-slate-50 text-slate-600">
                       <tr>
-                        <th className="p-3">Description</th>
-                        <th className="p-3">Code</th>
-                        <th className="p-3 text-right">Quantity</th>
-                        <th className="p-3 text-right">Rate</th>
-                        <th className="p-3 text-right">Amount</th>
+                        <th className="p-3 font-medium">Description</th>
+                        <th className="p-3 font-medium">Code</th>
+                        <th className="p-3 text-right font-medium">Quantity</th>
+                        <th className="p-3 text-right font-medium">Rate</th>
+                        <th className="p-3 text-right font-medium">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -778,10 +983,10 @@ function RetrieveQuotation() {
                           <td className="p-3 text-right">
                             {item.quantity} {item.unit ?? ''}
                           </td>
-                          <td className="whitespace-nowrap p-3 text-right">
+                          <td className="whitespace-nowrap p-3 text-right tabular-nums">
                             {formatCurrency(item.rate)}
                           </td>
-                          <td className="whitespace-nowrap p-3 text-right font-medium">
+                          <td className="whitespace-nowrap p-3 text-right font-medium tabular-nums">
                             {formatCurrency(
                               item.line_total ??
                               item.amount ??
@@ -826,7 +1031,7 @@ function RetrieveQuotation() {
 
                 <div className="flex justify-between gap-4 border-t border-slate-200 pt-3 text-lg font-bold text-slate-900">
                   <span>Total</span>
-                  <span>{formatCurrency(selected.total)}</span>
+                  <span className="tabular-nums">{formatCurrency(selected.total)}</span>
                 </div>
               </div>
 
@@ -868,9 +1073,7 @@ function Detail({
 }) {
   return (
     <div className="min-w-0">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-        {label}
-      </p>
+      <p className="text-xs font-medium text-slate-500">{label}</p>
       <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">
         {value || '—'}
       </p>
@@ -888,7 +1091,7 @@ function MoneyRow({
   return (
     <div className="flex justify-between gap-4 text-sm">
       <span className="text-slate-500">{label}</span>
-      <span className="text-slate-800">{formatCurrency(value)}</span>
+      <span className="tabular-nums text-slate-800">{formatCurrency(value)}</span>
     </div>
   )
 }

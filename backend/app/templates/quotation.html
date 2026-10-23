@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,6 +6,22 @@
   <link rel="stylesheet" href="quotation.css">
 </head>
 <body>
+
+  <!-- Letterhead: repeats on every page -->
+  <div class="letterhead-top">
+    <img class="letterhead-logo" src="airtech-logo.png" alt="Airtech Solutions (India) Pvt. Ltd.">
+    <p class="letterhead-cin">CIN NO. U64204MH2011PTC216098</p>
+  </div>
+  <div class="letterhead-bottom">
+    <img src="airtech-footer.png" alt="Airtech address, phone, e-mail and web">
+  </div>
+
+  <!-- Spacer rows keep the content clear of the letterhead on every page -->
+  <table class="page-frame">
+    <thead><tr><td><div class="header-space"></div></td></tr></thead>
+    <tfoot><tr><td><div class="footer-space"></div></td></tr></tfoot>
+    <tbody><tr><td class="page-body">
+
   <main class="quotation-document">
 
     <header class="document-header">
@@ -100,5 +115,8 @@
     </footer>
 
   </main>
+
+    </td></tr></tbody>
+  </table>
 </body>
 </html>

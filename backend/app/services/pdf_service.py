@@ -1,4 +1,4 @@
-
+import base64
 from io import BytesIO
 from pathlib import Path
 
@@ -13,6 +13,8 @@ APP_DIR = Path(__file__).resolve().parents[1]
 TEMPLATE_DIR = APP_DIR / "templates"
 CSS_FILE = TEMPLATE_DIR / "quotation.css"
 
+LETTERHEAD_IMAGES = ("airtech-logo.png", "airtech-footer.png")
+
 templates = Environment(
     loader=FileSystemLoader(str(TEMPLATE_DIR)),
     autoescape=select_autoescape(["html", "xml"]),
@@ -26,6 +28,18 @@ def format_money(value) -> str:
     except (ValueError, TypeError):
         return "0.00"
 
+
+def embed_images(html: str) -> str:
+    """Inline the letterhead images so Chromium never needs file paths."""
+    for name in LETTERHEAD_IMAGES:
+        path = TEMPLATE_DIR / name
+        if path.exists():
+            data = base64.b64encode(path.read_bytes()).decode("ascii")
+            html = html.replace(
+                f'src="{name}"',
+                f'src="data:image/png;base64,{data}"',
+            )
+    return html
 
 
 def generate_quotation_pdf(quotation_id: str) -> BytesIO:
@@ -77,6 +91,7 @@ def generate_quotation_pdf(quotation_id: str) -> BytesIO:
         template = templates.get_template("quotation.html")
         html = template.render(**context)
 
+        # Inline the stylesheet
         if CSS_FILE.exists():
             css = CSS_FILE.read_text(encoding="utf-8")
             style_tag = f"<style>\n{css}\n</style>"
@@ -86,22 +101,27 @@ def generate_quotation_pdf(quotation_id: str) -> BytesIO:
             else:
                 html = f"{style_tag}\n{html}"
 
+        # Inline the letterhead images (logo + address strip)
+        html = embed_images(html)
+
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
                 page = browser.new_page()
                 page.set_content(html, wait_until="load")
 
+                # Page margins are zero: the template handles its own
+                # spacing around the letterhead.
                 pdf_bytes = page.pdf(
                     format="A4",
                     print_background=True,
                     display_header_footer=False,
                     prefer_css_page_size=True,
                     margin={
-                        "top": "16mm",
-                        "right": "14mm",
-                        "bottom": "18mm",
-                        "left": "14mm",
+                        "top": "0mm",
+                        "right": "0mm",
+                        "bottom": "0mm",
+                        "left": "0mm",
                     },
                 )
             finally:

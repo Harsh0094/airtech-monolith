@@ -1,12 +1,83 @@
-
 /* =========================================
    AIRTECH QUOTATION — PRINT DESIGN
-   Edit this file to customize the PDF style.
+   Letterhead: Airtech logo + CIN (top of every page),
+   address strip (bottom of every page).
+   Keep airtech-logo.png and airtech-footer.png
+   in the same folder as this file.
    ========================================= */
 
+/* A4 with zero page margin: the letterhead is drawn with fixed elements
+   (works in Chrome/Playwright, WeasyPrint and wkhtmltopdf). Side spacing
+   comes from .page-body; top/bottom spacing from the spacer rows. */
 @page {
   size: A4;
-  margin: 16mm 14mm 18mm;
+  margin: 0;
+}
+
+/* Make sure colours and images print */
+* {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ---------- Letterhead (every page) ---------- */
+.letterhead-top {
+  position: fixed;
+  top: 10mm;
+  right: 15mm;
+  width: 88mm;
+  text-align: center;
+}
+
+.letterhead-logo {
+  display: block;
+  width: 88mm;
+  height: auto;
+}
+
+.letterhead-cin {
+  margin: 2mm 0 0;
+  font-family: Calibri, Arial, Helvetica, sans-serif;
+  font-size: 9pt;
+  color: #222;
+}
+
+.letterhead-bottom {
+  position: fixed;
+  bottom: 8mm;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+
+.letterhead-bottom img {
+  display: inline-block;
+  width: 150mm;
+  height: auto;
+}
+
+/* ---------- Spacer rows ---------- */
+.page-frame {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.page-frame > thead { display: table-header-group; }
+.page-frame > tfoot { display: table-footer-group; }
+
+.page-frame > thead td,
+.page-frame > tfoot td,
+.page-frame > tbody > tr > td {
+  padding: 0;
+  border: 0;
+}
+
+.header-space { height: 50mm; }   /* logo + CIN */
+.footer-space { height: 28mm; }   /* address strip */
+
+.page-body {
+  padding: 0 15mm 0 20mm !important;
+  vertical-align: top;
 }
 
 * {
@@ -21,7 +92,7 @@ body {
   background: #fff;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 10pt;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .quotation-document {
@@ -29,14 +100,15 @@ body {
   margin: 0 auto;
 }
 
+/* ---------- Header block (first page) ---------- */
 .document-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 20px;
-  padding-bottom: 14px;
+  padding-bottom: 12px;
   margin-bottom: 18px;
-  border-bottom: 1px solid #777;
+  border-bottom: 2px solid #c8392b; /* Airtech red */
 }
 
 .company-brand {
@@ -45,8 +117,13 @@ body {
 
 .company-brand h1 {
   margin: 0 0 6px;
-  font-size: 20pt;
+  font-size: 17pt;
   letter-spacing: 0.4px;
+  color: #c8392b;
+}
+
+.company-brand h1::first-letter {
+  color: #c8392b;
 }
 
 .company-brand p,
@@ -61,9 +138,12 @@ body {
 
 .document-meta h2 {
   margin: 0 0 8px;
-  font-size: 16pt;
+  font-size: 15pt;
+  letter-spacing: 1px;
+  color: #1c2b4a; /* navy from the logo wordmark */
 }
 
+/* ---------- Recipient + subject ---------- */
 .recipient-section {
   margin-bottom: 16px;
 }
@@ -85,8 +165,10 @@ body {
   text-align: center;
   font-size: 11pt;
   line-height: 1.4;
+  color: #1c2b4a;
 }
 
+/* ---------- Items table ---------- */
 .items-table {
   width: 100%;
   border-collapse: collapse;
@@ -103,7 +185,8 @@ body {
 }
 
 .items-table th {
-  background: #e8e8e8;
+  background: #1c2b4a;
+  color: #fff;
   text-align: center;
   font-weight: 700;
 }
@@ -132,10 +215,13 @@ body {
   page-break-inside: avoid;
 }
 
+/* ---------- Totals ---------- */
 .totals-table {
   width: 58%;
   margin: 0 0 22px auto;
   border-collapse: collapse;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .totals-table td {
@@ -150,9 +236,11 @@ body {
 
 .grand-total {
   font-weight: 700;
-  background: #e8e8e8;
+  background: #fbe9e6;
+  color: #1c2b4a;
 }
 
+/* ---------- Terms ---------- */
 .terms-section {
   margin-top: 18px;
 }
@@ -160,6 +248,7 @@ body {
 .terms-section h3 {
   margin: 0 0 8px;
   font-size: 11pt;
+  color: #1c2b4a;
 }
 
 .terms-section > div {
@@ -167,6 +256,7 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* ---------- Signatures ---------- */
 .signature-section {
   display: flex;
   justify-content: space-between;
@@ -186,17 +276,12 @@ body {
   font-weight: 700;
 }
 
+/* The address strip now comes from the page footer image on every page,
+   so the in-body footer is hidden to avoid printing it twice. */
 .document-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 28px;
-  padding-top: 8px;
-  border-top: 1px solid #999;
-  font-size: 8pt;
+  display: none;
 }
 
-/* Keep the document clean when printed or converted to PDF. */
 @media print {
   html,
   body {
