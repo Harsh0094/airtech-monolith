@@ -11,6 +11,7 @@ import {
   UserRound,
   IndianRupee,
   X,
+  Mail,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -142,8 +143,15 @@ function RetrieveQuotation() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<Quotation | null>(null)
-  const [loadingDetails, setLoadingDetails] = useState(false)
+  const [loadingDetails] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [pdfQuotation, setPdfQuotation] = useState<Quotation | null>(null)
+
+  const pdfUrl = pdfQuotation
+    ? `${API_URL}/${encodeURIComponent(
+      pdfQuotation.quotation_id || pdfQuotation.id,
+    )}/pdf`
+    : ''
 
   const loadQuotations = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
@@ -180,7 +188,6 @@ function RetrieveQuotation() {
 
   useEffect(() => {
     const controller = new AbortController()
-
     void loadQuotations(controller.signal)
 
     return () => controller.abort()
@@ -210,7 +217,7 @@ function RetrieveQuotation() {
       const matchesStatus =
         !status ||
         (quotation.status || 'Draft').toLowerCase() ===
-          status.toLowerCase()
+        status.toLowerCase()
 
       const quotationDate =
         quotation.quotation_date?.slice(0, 10) ?? ''
@@ -233,44 +240,59 @@ function RetrieveQuotation() {
     })
   }, [quotations, search, category, status, dateFrom, dateTo])
 
-  async function viewQuotation(quotation: Quotation) {
+  function viewQuotation(quotation: Quotation) {
     setError('')
-    setSelected(quotation)
 
     const id = quotation.quotation_id || quotation.id
-    if (!id) return
 
-    setLoadingDetails(true)
+    if (!id) {
+      setError('Could not find the quotation ID.')
+      return
+    }
+
+    setSelected(null)
+    setPdfQuotation(quotation)
+  }
+
+  async function downloadPdf(quotation: Quotation) {
+    const id = quotation.quotation_id || quotation.id
+
+    if (!id) {
+      setError('Could not find the quotation ID.')
+      return
+    }
+
+    setError('')
+    setDownloadingId(quotation.id)
 
     try {
       const response = await fetch(
-        `${API_URL}/${encodeURIComponent(id)}`,
+        `${API_URL}/${encodeURIComponent(id)}/pdf`,
       )
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
 
-      const data = await response.json()
-      const record = data.quotation ?? data
+      const pdfBlob = await response.blob()
+      const objectUrl = URL.createObjectURL(pdfBlob)
+      const link = document.createElement('a')
 
-      setSelected(normalizeQuotation(record))
+      link.href = objectUrl
+      link.download = `quotation-${quotation.quotation_number || id}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
     } catch {
       setError(
-        `Could not load the full details for ${quotation.quotation_number}. The register is still available.`,
+        `Could not download the PDF for ${quotation.quotation_number}. Check that the backend is running.`,
       )
     } finally {
-      setLoadingDetails(false)
+      setDownloadingId(null)
     }
   }
-
- function downloadPdf(quotation: Quotation) {
-  setDownloadingId(quotation.id)
-  setError(
-    'PDF download is not implemented yet. Your saved quotation is safe.',
-  )
-  setDownloadingId(null)
-}
 
   function clearFilters() {
     setSearch('')
@@ -336,11 +358,11 @@ function RetrieveQuotation() {
             {loading
               ? '—'
               : formatCurrency(
-                  filteredQuotations.reduce(
-                    (sum, item) => sum + Number(item.total ?? 0),
-                    0,
-                  ),
-                )}
+                filteredQuotations.reduce(
+                  (sum, item) => sum + Number(item.total ?? 0),
+                  0,
+                ),
+              )}
           </p>
         </div>
 
@@ -541,21 +563,38 @@ function RetrieveQuotation() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => void viewQuotation(quotation)}
-                          title="View quotation details"
+                          onClick={() => viewQuotation(quotation)}
+                          title="View quotation PDF"
                         >
                           <Eye className="mr-1 h-4 w-4" />
                           View
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            window.alert(
+                              'Send Mail button is ready. Outlook integration will be added in the next step.',
+                            )
+                          }}
+                          title="Send quotation by email"
+                        >
+                          <Mail className="mr-1 h-4 w-4" />
+                          Send Mail
                         </Button>
 
                         <Button
                           type="button"
                           size="sm"
-                          onClick={() => downloadPdf(quotation)}
-                          title="PDF generation coming soon"
+                          onClick={() => void downloadPdf(quotation)}
+                          disabled={downloadingId === quotation.id}
+                          title="Download quotation PDF"
                         >
                           <Download className="mr-1 h-4 w-4" />
-                          PDF Coming Soon
+                          {downloadingId === quotation.id
+                            ? 'Preparing...'
+                            : 'PDF'}
                         </Button>
                       </div>
                     </td>
@@ -571,13 +610,45 @@ function RetrieveQuotation() {
         </div>
       </section>
 
+      {/* Simple PDF preview modal */}
+      {pdfQuotation && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-3"
+          onClick={() => setPdfQuotation(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Quotation PDF preview"
+            className="relative h-[90vh] w-full max-w-5xl overflow-hidden rounded-lg bg-white shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPdfQuotation(null)}
+              aria-label="Close PDF preview"
+              className="absolute right-3 top-3 z-10 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow hover:bg-slate-100"
+            >
+              Done ✕
+            </button>
+
+            <iframe
+              key={pdfUrl}
+              title={`Quotation ${pdfQuotation.quotation_number}`}
+              src={pdfUrl}
+              className="h-full w-full border-0"
+            />
+          </div>
+        </div>
+      )}
+
+
+
+      {/* Existing quotation details modal */}
       {selected && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
-          onClick={() => {
-            setSelected(null)
-            setLoadingDetails(false)
-          }}
+          onClick={() => setSelected(null)}
         >
           <div
             role="dialog"
@@ -603,10 +674,7 @@ function RetrieveQuotation() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setSelected(null)
-                  setLoadingDetails(false)
-                }}
+                onClick={() => setSelected(null)}
               >
                 <X className="mr-1 h-4 w-4" />
                 Close
@@ -716,8 +784,8 @@ function RetrieveQuotation() {
                           <td className="whitespace-nowrap p-3 text-right font-medium">
                             {formatCurrency(
                               item.line_total ??
-                                item.amount ??
-                                item.quantity * item.rate * (item.duration ?? 1),
+                              item.amount ??
+                              item.quantity * item.rate * (item.duration ?? 1),
                             )}
                           </td>
                         </tr>
@@ -773,7 +841,7 @@ function RetrieveQuotation() {
               <div className="flex justify-end">
                 <Button
                   type="button"
-                  onClick={() => downloadPdf(selected)}
+                  onClick={() => void downloadPdf(selected)}
                   disabled={downloadingId === selected.id}
                   className="gap-2"
                 >

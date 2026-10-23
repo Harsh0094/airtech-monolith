@@ -1,0 +1,104 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Quotation {{ quotation_number }}</title>
+  <link rel="stylesheet" href="quotation.css">
+</head>
+<body>
+  <main class="quotation-document">
+
+    <header class="document-header">
+      <div class="company-brand">
+        <h1>AIRTECH SOLUTIONS</h1>
+        <p>{{ company_address }}</p>
+        <p>{{ company_contact }}</p>
+      </div>
+      <div class="document-meta">
+        <h2>QUOTATION</h2>
+        <p><strong>Quotation No:</strong> {{ quotation_number }}</p>
+        <p><strong>Date:</strong> {{ quotation_date }}</p>
+        <p><strong>Valid for:</strong> {{ validity_days }} days</p>
+      </div>
+    </header>
+
+    <section class="recipient-section">
+      <p><strong>To:</strong></p>
+      <p>{{ customer_company }}</p>
+      <p>{{ customer_name }}</p>
+      <p>{{ customer_address }}</p>
+      <p><strong>Site:</strong> {{ site_name }}</p>
+      <p><strong>Site Address:</strong> {{ site_address }}</p>
+    </section>
+
+    <section class="subject-section">
+      <p><strong>Subject:</strong> {{ subject }}</p>
+      <p>Dear {{ contact_person or customer_name }},</p>
+      <p>{{ introduction }}</p>
+      <p>We are pleased to submit our offer as follows:</p>
+    </section>
+
+    <h3 class="offer-title">{{ offer_title }}</h3>
+
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>Sr. No.</th>
+          <th>Description</th>
+          <th>Required Quantity</th>
+          <th>Unit Rate</th>
+          <th>Duration</th>
+          <th>Total Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>
+            <strong>{{ item.description }}</strong>
+            {% if item.product_code %}
+            <div>Product Code: {{ item.product_code }}</div>
+            {% endif %}
+          </td>
+          <td>{{ item.quantity }} {{ item.unit }}</td>
+          <td>{{ item.rate }}</td>
+          <td>{{ item.duration }} {{ item.rate_unit }}</td>
+          <td>{{ item.line_total }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <table class="totals-table">
+      <tr><td>Total Basic Amount</td><td>{{ subtotal }}</td></tr>
+      <tr><td>Discount</td><td>{{ discount }}</td></tr>
+      <tr><td>{{ tax_type }} ({{ tax_percent }}%)</td><td>{{ tax_amount }}</td></tr>
+      <tr class="grand-total"><td>Grand Total</td><td>{{ total }}</td></tr>
+    </table>
+
+    <section class="terms-section">
+      <h3>Terms &amp; Conditions</h3>
+      <div>{{ terms }}</div>
+    </section>
+
+    <section class="signature-section">
+      <div>
+        <p>Signature of the Owner</p>
+        <strong>Airtech Solutions India Private Limited</strong>
+      </div>
+      <div>
+        <p>Signature of the User</p>
+        <strong>{{ customer_company or customer_name }}</strong>
+      </div>
+    </section>
+
+    <footer class="document-footer">
+      <span>{{ company_address }}</span>
+      <span>Page <span class="page-number"></span></span>
+    </footer>
+
+  </main>
+</body>
+</html>
