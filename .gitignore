@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+
+# Local Excel data
+backend/data/
+*.xlsx
+*.xls
+
+# Frontend
+node_modules/
+dist/
+
+# Editors
+.vscode/
+.idea/
+.DS_Store
