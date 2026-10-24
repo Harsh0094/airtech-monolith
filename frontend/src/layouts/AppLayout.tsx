@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react'
 import {
   LayoutDashboard,
@@ -20,6 +21,7 @@ import Quotations from '@/pages/Quotations'
 import Customers from '@/pages/Customers'
 import Reports from '@/pages/Reports'
 import AppSettings from '@/pages/Settings'
+import TermsTemplates from '@/pages/TermsTemplates'
 
 const navigation = [
   { label: 'Dashboard', icon: LayoutDashboard },
@@ -29,6 +31,7 @@ const navigation = [
   { label: 'Service & Maintenance', icon: Wrench },
   { label: 'Orders', icon: ClipboardList },
   { label: 'Reports', icon: BarChart3 },
+  { label: 'Terms & Conditions', icon: FileText },
   { label: 'Settings', icon: Settings },
 ]
 
@@ -42,9 +45,12 @@ const quotationCategories = [
 
 const navButtonBase =
   'group flex min-h-11 w-full items-center rounded-xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-300'
+
 const navActive =
   'bg-blue-600 text-white shadow-md shadow-blue-950/30 ring-1 ring-inset ring-white/10'
-const navIdle = 'text-slate-300 hover:bg-white/[0.08] hover:text-white'
+
+const navIdle =
+  'text-slate-300 hover:bg-white/[0.08] hover:text-white'
 
 function AppLayout() {
   const [activePage, setActivePage] = useState('Dashboard')
@@ -137,6 +143,9 @@ function AppLayout() {
       case 'Reports':
         return <Reports />
 
+      case 'Terms & Conditions':
+        return <TermsTemplates />
+
       case 'Settings':
         return <AppSettings />
 
@@ -163,7 +172,6 @@ function AppLayout() {
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         } ${sidebarCollapsed ? 'w-[76px]' : 'w-[260px]'}`}
       >
-        {/* Brand */}
         <div
           className={`flex h-[72px] shrink-0 items-center border-b border-white/10 ${
             sidebarCollapsed ? 'justify-center px-2' : 'px-5'
@@ -186,7 +194,6 @@ function AppLayout() {
           )}
         </div>
 
-        {/* Navigation */}
         <nav
           aria-label="Pages"
           className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-3 py-4"
@@ -283,7 +290,6 @@ function AppLayout() {
           })}
         </nav>
 
-        {/* Sidebar footer */}
         <div className="hidden shrink-0 border-t border-white/10 p-3 md:block">
           <button
             type="button"
@@ -304,7 +310,6 @@ function AppLayout() {
         </div>
       </aside>
 
-      {/* Main workspace */}
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur-md sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">

@@ -19,7 +19,6 @@ SHEETS = {
         "email",
         "address",
     ],
-    
     "Quotations": [
         "quotation_id",
         "quotation_number",
@@ -75,10 +74,21 @@ SHEETS = {
         "amount",
         "status",
     ],
+    "TermsTemplates": [
+        "template_id",
+        "name",
+        "company",
+        "status",
+        "content_html",
+        "include_in_pdf",
+        "created_at",
+        "updated_at",
+    ],
 }
 
+
 def ensure_workbook() -> Path:
-    """Create the data folder and workbook if they do not exist."""
+    """Create the workbook if needed and safely add missing worksheets/headers."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     if not EXCEL_FILE.exists():
@@ -86,23 +96,21 @@ def ensure_workbook() -> Path:
         worksheet = workbook.active
         worksheet.title = "Customers"
 
-        for sheet_name, headers in SHEETS.items():
-            if sheet_name == "Customers":
-                current_sheet = worksheet
-            else:
-                current_sheet = workbook.create_sheet(sheet_name)
-
-            current_sheet.append(headers)
-
         try:
+            for sheet_name, headers in SHEETS.items():
+                if sheet_name == "Customers":
+                    current_sheet = worksheet
+                else:
+                    current_sheet = workbook.create_sheet(sheet_name)
+
+                current_sheet.append(headers)
+
             workbook.save(EXCEL_FILE)
         finally:
             workbook.close()
 
         return EXCEL_FILE
 
-
-    # Add missing sheets and safely migrate worksheet headers.
     workbook = load_workbook(EXCEL_FILE)
 
     try:
@@ -113,37 +121,30 @@ def ensure_workbook() -> Path:
                 continue
 
             worksheet = workbook[sheet_name]
-
             existing_headers = [
-                cell.value
-                for cell in worksheet[1]
+                cell.value for cell in worksheet[1]
             ]
 
-            # Initialize an empty worksheet.
             if not any(header is not None for header in existing_headers):
                 worksheet.append(headers)
                 continue
 
-            # Preserve existing records and append newly required columns.
-            missing_headers = [
-                header
-                for header in headers
-                if header not in existing_headers
-            ]
+            # Preserve existing columns and append missing ones.
+            for header in headers:
+                if header not in existing_headers:
+                    existing_headers.append(header)
+                    worksheet.cell(
+                        row=1,
+                        column=len(existing_headers),
+                        value=header,
+                    )
 
-            for header in missing_headers:
-                existing_headers.append(header)
-                worksheet.cell(
-                    row=1,
-                    column=len(existing_headers),
-                    value=header,
-                )
-
-    finally:
         workbook.save(EXCEL_FILE)
+    finally:
         workbook.close()
 
     return EXCEL_FILE
+
 
 def read_records(sheet_name: str) -> list[dict[str, Any]]:
     """Read worksheet rows as dictionaries."""
@@ -151,7 +152,6 @@ def read_records(sheet_name: str) -> list[dict[str, Any]]:
         raise ValueError(f"Unknown worksheet: {sheet_name}")
 
     ensure_workbook()
-
     workbook = load_workbook(
         EXCEL_FILE,
         read_only=True,
@@ -170,7 +170,6 @@ def read_records(sheet_name: str) -> list[dict[str, Any]]:
         ]
     finally:
         workbook.close()
-
 
 
 def append_record(
@@ -195,15 +194,9 @@ def append_record(
 
     try:
         worksheet = workbook[sheet_name]
-
         actual_headers = [
             cell.value for cell in worksheet[1]
-        ]
-
-        # Keep existing headers and append missing required headers.
-        actual_headers = [
-            header for header in actual_headers
-            if header is not None
+            if cell.value is not None
         ]
 
         for header in expected_headers:
@@ -220,14 +213,12 @@ def append_record(
             for header in expected_headers
         }
 
-        # Write each value under its matching header.
         worksheet.append([
             saved_record.get(header)
             for header in actual_headers
         ])
 
         workbook.save(EXCEL_FILE)
-
     finally:
         workbook.close()
 
