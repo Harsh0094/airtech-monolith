@@ -188,3 +188,54 @@ def update_terms_template(template_id: str, payload: dict):
         workbook.close()
 
     return {"template": updated}
+
+
+
+@router.delete("/{template_id}")
+def delete_terms_template(template_id: str):
+    """Delete one reusable terms template without modifying existing quotations."""
+    from openpyxl import load_workbook
+    from app.db.excel_storage import EXCEL_FILE, ensure_workbook
+
+    ensure_workbook()
+    workbook = load_workbook(EXCEL_FILE)
+
+    try:
+        worksheet = workbook["TermsTemplates"]
+        headers = [cell.value for cell in worksheet[1]]
+
+        if "template_id" not in headers:
+            raise HTTPException(
+                status_code=500,
+                detail="The template_id column is missing.",
+            )
+
+        id_column = headers.index("template_id") + 1
+        row_number = None
+
+        for row in range(2, worksheet.max_row + 1):
+            row_id = worksheet.cell(
+                row=row,
+                column=id_column,
+            ).value
+
+            if str(row_id) == template_id:
+                row_number = row
+                break
+
+        if row_number is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Terms template not found.",
+            )
+
+        worksheet.delete_rows(row_number, 1)
+        workbook.save(EXCEL_FILE)
+
+    finally:
+        workbook.close()
+
+    return {
+        "message": "Terms template deleted successfully.",
+        "template_id": template_id,
+    }

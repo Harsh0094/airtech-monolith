@@ -11,6 +11,8 @@ import {
   Wrench,
   ClipboardList,
   ChevronDown,
+  FilePlus2,
+  Files,
   PanelLeftClose,
   PanelLeftOpen,
   Bell,
@@ -56,6 +58,8 @@ function AppLayout() {
   const [activePage, setActivePage] = useState('Dashboard')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [quotationsOpen, setQuotationsOpen] = useState(false)
+  const [termsOpen, setTermsOpen] = useState(false)
+  const [termsView, setTermsView] = useState<'create' | 'saved'>('create')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   useEffect(() => {
@@ -85,6 +89,10 @@ function AppLayout() {
 
     if (label === 'Quotations') {
       setQuotationsOpen((open) => !open)
+    }
+    if (label === 'Terms & Conditions') {
+      setTermsOpen((open) => !open)
+      setTermsView('create')
     }
   }
 
@@ -144,7 +152,7 @@ function AppLayout() {
         return <Reports />
 
       case 'Terms & Conditions':
-        return <TermsTemplates />
+        return <TermsTemplates initialView={termsView} />
 
       case 'Settings':
         return <AppSettings />
@@ -264,6 +272,74 @@ function AppLayout() {
                           {category}
                         </button>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
+            if (item.label === 'Terms & Conditions') {
+              return (
+                <div key={item.label} className="space-y-1">
+                  <button
+                    type="button"
+                    title={sidebarCollapsed ? item.label : undefined}
+                    onClick={() => {
+                      if (isActive) {
+                        setTermsOpen((open) => !open)
+                      } else {
+                        setActivePage('Terms & Conditions')
+                        setTermsOpen(true)
+                        setTermsView('create')
+                        setMobileMenuOpen(false)
+                      }
+                    }}
+                    aria-expanded={termsOpen}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`${navButtonBase} ${
+                      sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+                    } ${isActive ? navActive : navIdle}`}
+                  >
+                    <Icon size={19} strokeWidth={1.9} />
+                    {!sidebarCollapsed && (
+                      <>
+                        <span className="flex-1 text-left">{item.label}</span>
+                        <ChevronDown
+                          size={15}
+                          className={`transition-transform ${termsOpen ? 'rotate-180' : ''}`}
+                        />
+                      </>
+                    )}
+                  </button>
+
+                  {termsOpen && !sidebarCollapsed && (
+                    <div className="ml-5 space-y-0.5 border-l border-blue-300/20 py-1.5 pl-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActivePage('Terms & Conditions')
+                          setTermsView('create')
+                          setTermsOpen(true)
+                          setMobileMenuOpen(false)
+                        }}
+                        className="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-blue-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                      >
+                        <FilePlus2 size={15} />
+                        Create Terms
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActivePage('Terms & Conditions')
+                          setTermsView('saved')
+                          setTermsOpen(true)
+                          setMobileMenuOpen(false)
+                        }}
+                        className="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-semibold text-slate-300 transition-colors hover:bg-blue-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
+                      >
+                        <Files size={15} />
+                        Saved Terms
+                      </button>
                     </div>
                   )}
                 </div>

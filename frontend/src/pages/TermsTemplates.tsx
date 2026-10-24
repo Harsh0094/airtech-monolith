@@ -19,6 +19,10 @@ import {
   FileText,
   FileUp,
   LoaderCircle,
+  Search,
+  Trash2,
+  Pencil,
+  X,
 } from 'lucide-react'
 
 const API_URL = 'http://127.0.0.1:8000/api/terms-templates/'
@@ -35,9 +39,15 @@ type Template = {
 const emptyContent =
   '<h2>Terms &amp; Conditions</h2><ol><li><p>Enter your terms and conditions here.</p></li></ol>'
 
-export default function TermsTemplates() {
+type TermsTemplatesProps = { initialView?: 'create' | 'saved' }
+
+export default function TermsTemplates({ initialView = 'create' }: TermsTemplatesProps) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [templateId, setTemplateId] = useState('')
+  const [view, setView] = useState<'create' | 'saved'>(initialView)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [viewingTemplate, setViewingTemplate] = useState<Template | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [name, setName] = useState('Airtech Airtime / Walkie-Talkie Rental')
   const [company, setCompany] = useState('Airtech')
   const [status, setStatus] = useState('Draft')
@@ -93,7 +103,12 @@ export default function TermsTemplates() {
     void loadTemplates()
   }, [loadTemplates])
 
+  useEffect(() => {
+    setView(initialView)
+  }, [initialView])
+
   function startNewTemplate() {
+    setView('create')
     setTemplateId('')
     setName('Airtech Airtime / Walkie-Talkie Rental')
     setCompany('Airtech')
@@ -104,6 +119,7 @@ export default function TermsTemplates() {
   }
 
   function selectTemplate(id: string) {
+    setView('create')
     const selected = templates.find((item) => item.template_id === id)
     if (!selected) return
 
@@ -116,6 +132,55 @@ export default function TermsTemplates() {
     setMessage('')
   }
 
+
+  async function deleteTemplate(template: Template) {
+    const confirmed = window.confirm(
+      `Delete the terms template "${template.name}"? This cannot be undone.`,
+    )
+    if (!confirmed) return
+
+    setDeletingId(template.template_id)
+    setMessage('')
+    try {
+      const response = await fetch(
+        `${API_URL}${encodeURIComponent(template.template_id)}`,
+        { method: 'DELETE' },
+      )
+      if (!response.ok) {
+        const detail = await response.text()
+        throw new Error(
+          response.status === 405
+            ? 'The backend does not support deleting terms templates yet. We need to add its DELETE endpoint.'
+            : detail || `Could not delete template (HTTP ${response.status}).`,
+        )
+      }
+
+      setTemplates((current) =>
+        current.filter((item) => item.template_id !== template.template_id),
+      )
+      if (templateId === template.template_id) startNewTemplate()
+      setMessage('Template deleted successfully.')
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not delete the template.',
+      )
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const filteredTemplates = templates.filter((item) => {
+    const query = searchTerm.trim().toLowerCase()
+    return (
+      !query ||
+      item.name.toLowerCase().includes(query) ||
+      (item.company || '').toLowerCase().includes(query) ||
+      (item.status || '').toLowerCase().includes(query) ||
+      (item.content_html || '').replace(/<[^>]*>/g, ' ').toLowerCase().includes(query)
+    )
+  })
 
   async function importWordDocument(file?: File) {
     if (!file || !editor) return
@@ -260,6 +325,14 @@ export default function TermsTemplates() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setView('saved')}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <FileText size={17} />
+            Saved Terms
+          </button>
           <input
             ref={fileInputRef}
             type="file"
@@ -287,6 +360,187 @@ export default function TermsTemplates() {
         </div>
       </div>
 
+      {view === 'saved' && (
+        <section className="space-y-4" aria-label="Saved terms templates">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+              <h2 className="text-xl font-bold text-[#142d4e]">Saved Terms &amp; Conditions</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Search, review, edit, or delete your saved terms templates.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void loadTemplates()}
+                disabled={loading}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {loading ? 'Refreshing…' : 'Refresh'}
+              </button>
+              <button
+                type="button"
+                onClick={startNewTemplate}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                <Plus size={16} />
+                Create Terms
+              </button>
+            </div>
+          </div>
+
+          <label className="relative block">
+            <Search size={17} className="pointer-events-none absolute left-3 top-3 text-slate-400" />
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search template name, company, status, or terms…"
+              aria-label="Search saved terms"
+              className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+
+          {loading ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
+              Loading saved terms templates…
+            </div>
+          ) : filteredTemplates.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+              {templates.length === 0
+                ? 'No saved terms templates yet. Choose Create Terms to make your first template.'
+                : 'No templates match your search.'}
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {filteredTemplates.map((item) => (
+                <article
+                  key={item.template_id}
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setViewingTemplate(item)}
+                    className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-base font-semibold text-[#142d4e]">{item.name}</span>
+                      <span className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                        <span>{item.company || 'Airtech'}</span>
+                        <span>•</span>
+                        <span>{item.status || 'Draft'}</span>
+                        <span>•</span>
+                        <span>{item.include_in_pdf ? 'Included in quotation PDF' : 'Not included in quotation PDF'}</span>
+                      </span>
+                      <span className="mt-2 block text-sm text-slate-500">
+                        {(item.content_html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180) || 'No terms content yet.'}
+                        {(item.content_html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length > 180 ? '…' : ''}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2 text-sm font-medium text-blue-700">
+                      View <span aria-hidden="true">›</span>
+                    </span>
+                  </button>
+                  <div className="flex flex-wrap gap-2 border-t border-slate-100 px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => selectTemplate(item.template_id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                      <Pencil size={15} />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteTemplate(item)}
+                      disabled={deletingId === item.template_id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                    >
+                      {deletingId === item.template_id ? (
+                        <LoaderCircle size={15} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={15} />
+                      )}
+                      {deletingId === item.template_id ? 'Deleting…' : 'Delete'}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {viewingTemplate && (
+        <div
+          className="fixed inset-0 z-[100] flex justify-end bg-slate-950/40 backdrop-blur-[1px]"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setViewingTemplate(null)
+          }}
+        >
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${viewingTemplate.name} terms details`}
+            className="flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-7">
+              <div className="min-w-0">
+                <h2 className="break-words text-lg font-bold text-[#142d4e]">{viewingTemplate.name}</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {viewingTemplate.company || 'Airtech'} · {viewingTemplate.status || 'Draft'}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close terms drawer"
+                onClick={() => setViewingTemplate(null)}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-7">
+              <div className="mb-4 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700">
+                  {viewingTemplate.include_in_pdf ? 'Included in quotation PDF' : 'Not included in quotation PDF'}
+                </span>
+              </div>
+              {viewingTemplate.content_html?.trim() ? (
+                <div
+                  className="prose prose-sm max-w-none break-words text-slate-700 [&_h1]:mb-3 [&_h1]:mt-4 [&_h1]:text-lg [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-base [&_h2]:font-semibold [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6 [&_li]:my-1 [&_table]:my-4 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-300 [&_td]:p-2 [&_th]:border [&_th]:border-slate-300 [&_th]:bg-slate-50 [&_th]:p-2 [&_p]:my-2"
+                  dangerouslySetInnerHTML={{ __html: viewingTemplate.content_html }}
+                />
+              ) : (
+                <p className="text-sm italic text-slate-400">This template has no terms content.</p>
+              )}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-4 sm:px-7">
+              <button
+                type="button"
+                onClick={() => setViewingTemplate(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const selectedId = viewingTemplate.template_id
+                  setViewingTemplate(null)
+                  selectTemplate(selectedId)
+                }}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                <Pencil size={15} />
+                Edit Terms
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {view === 'create' && (
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="mb-5 flex items-center gap-3">
           <div className="rounded-xl bg-blue-50 p-3 text-blue-700">
@@ -476,6 +730,7 @@ export default function TermsTemplates() {
           </p>
         )}
       </div>
+      )}
     </div>
   )
 }
