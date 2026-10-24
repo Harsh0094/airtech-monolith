@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react'
 import {
   LayoutDashboard,
@@ -24,6 +25,7 @@ import Customers from '@/pages/Customers'
 import Reports from '@/pages/Reports'
 import AppSettings from '@/pages/Settings'
 import TermsTemplates from '@/pages/TermsTemplates'
+import ServiceMaintenance from '@/pages/ServiceMaintenance'
 
 const navigation = [
   { label: 'Dashboard', icon: LayoutDashboard },
@@ -83,6 +85,43 @@ function AppLayout() {
     }
   }, [])
 
+  // Allows dashboard quick-action buttons to open sidebar pages.
+  useEffect(() => {
+    function handleDashboardNavigation(event: Event) {
+      const customEvent = event as CustomEvent<string>
+      const page = customEvent.detail
+      const allowedPages = navigation.map((item) => item.label)
+
+      if (!allowedPages.includes(page)) {
+        return
+      }
+
+      setActivePage(page)
+      setMobileMenuOpen(false)
+
+      if (page === 'Quotations') {
+        setQuotationsOpen(true)
+      }
+
+      if (page === 'Terms & Conditions') {
+        setTermsOpen(true)
+        setTermsView('create')
+      }
+    }
+
+    window.addEventListener(
+      'airtech:navigate',
+      handleDashboardNavigation,
+    )
+
+    return () => {
+      window.removeEventListener(
+        'airtech:navigate',
+        handleDashboardNavigation,
+      )
+    }
+  }, [])
+
   function handleNavigation(label: string) {
     setActivePage(label)
     setMobileMenuOpen(false)
@@ -90,6 +129,7 @@ function AppLayout() {
     if (label === 'Quotations') {
       setQuotationsOpen((open) => !open)
     }
+
     if (label === 'Terms & Conditions') {
       setTermsOpen((open) => !open)
       setTermsView('create')
@@ -133,12 +173,7 @@ function AppLayout() {
         )
 
       case 'Service & Maintenance':
-        return (
-          <PlaceholderPage
-            title="Service & Maintenance"
-            description="Manage service requests, damage reports, repairs and maintenance contracts."
-          />
-        )
+        return <ServiceMaintenance />
 
       case 'Orders':
         return (
@@ -264,9 +299,7 @@ function AppLayout() {
                         <button
                           key={category}
                           type="button"
-                          onClick={() =>
-                            handleQuotationCategory(category)
-                          }
+                          onClick={() => handleQuotationCategory(category)}
                           className="min-h-9 w-full rounded-lg px-3 text-left text-xs text-slate-300 transition-colors hover:bg-blue-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300"
                         >
                           {category}
@@ -303,10 +336,14 @@ function AppLayout() {
                     <Icon size={19} strokeWidth={1.9} />
                     {!sidebarCollapsed && (
                       <>
-                        <span className="flex-1 text-left">{item.label}</span>
+                        <span className="flex-1 text-left">
+                          {item.label}
+                        </span>
                         <ChevronDown
                           size={15}
-                          className={`transition-transform ${termsOpen ? 'rotate-180' : ''}`}
+                          className={`transition-transform ${
+                            termsOpen ? 'rotate-180' : ''
+                          }`}
                         />
                       </>
                     )}
@@ -327,6 +364,7 @@ function AppLayout() {
                         <FilePlus2 size={15} />
                         Create Terms
                       </button>
+
                       <button
                         type="button"
                         onClick={() => {
@@ -398,10 +436,17 @@ function AppLayout() {
               <Menu size={20} />
             </button>
 
-            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
+            <nav
+              aria-label="Breadcrumb"
+              className="flex min-w-0 items-center gap-2 text-sm"
+            >
               <span className="hidden text-slate-400 sm:inline">Airtech</span>
-              <span aria-hidden="true" className="hidden text-slate-300 sm:inline">/</span>
-              <span className="truncate font-medium text-slate-700">{activePage}</span>
+              <span aria-hidden="true" className="hidden text-slate-300 sm:inline">
+                /
+              </span>
+              <span className="truncate font-medium text-slate-700">
+                {activePage}
+              </span>
             </nav>
           </div>
 
