@@ -300,3 +300,32 @@ body {
     display: table-footer-group;
   }
 }
+
+
+/* Preserve Terms & Conditions tables in generated PDFs */
+.terms-section table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  margin: 12px 0;
+  font-size: 9px;
+}
+
+.terms-section th,
+.terms-section td {
+  border: 1px solid #555;
+  padding: 5px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.terms-section th {
+  font-weight: bold;
+  background-color: #f1f5f9;
+}
+
+.terms-section th p,
+.terms-section td p {
+  margin: 0;
+}

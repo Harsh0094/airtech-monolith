@@ -6,6 +6,7 @@ from app.services.quotation_service import (
     create_quotation,
     get_quotation,
     list_quotations,
+    delete_quotation,
 )
 from app.services.pdf_service import generate_quotation_pdf
 
@@ -40,3 +41,8 @@ def download_quotation_pdf(quotation_id: str):
 @router.get("/{quotation_id}")
 def get_quotation_endpoint(quotation_id: str):
     return {"quotation": get_quotation(quotation_id)}
+
+
+@router.delete("/{quotation_id}")
+def delete_quotation_endpoint(quotation_id: str):
+    return delete_quotation(quotation_id)

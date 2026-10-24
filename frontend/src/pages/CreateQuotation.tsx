@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Mail } from 'lucide-react'
 import type { FormEvent, ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
@@ -40,6 +40,15 @@ type QuotationItem = {
   rate: string
   rateUnit: RateUnit
   duration: string
+}
+
+type TermsTemplate = {
+  template_id: string
+  name: string
+  company: string
+  status: string
+  content_html: string
+  include_in_pdf: boolean
 }
 
 const money = (value: number) =>
@@ -196,6 +205,9 @@ function CreateQuotation({
   )
   const [validityDays, setValidityDays] = useState('30')
   const [notes, setNotes] = useState('')
+  const [termsTemplates, setTermsTemplates] = useState<TermsTemplate[]>([])
+  const [selectedTermsTemplateId, setSelectedTermsTemplateId] = useState('')
+  const [termsTemplatesError, setTermsTemplatesError] = useState('')
 
   const [items, setItems] = useState<QuotationItem[]>([])
   const [nextItemId, setNextItemId] = useState(1)
@@ -218,6 +230,45 @@ function CreateQuotation({
   const [frequencyDetails, setFrequencyDetails] = useState('')
   const [contractMonths, setContractMonths] = useState('12')
   const [maintenanceCoverage, setMaintenanceCoverage] = useState('')
+
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadTermsTemplates() {
+      try {
+        const response = await fetch(
+          'http://127.0.0.1:8000/api/terms-templates/',
+        )
+
+        if (!response.ok) {
+          throw new Error('Could not load saved terms templates.')
+        }
+
+        const result = await response.json()
+        const templates: TermsTemplate[] = result.templates ?? []
+
+        if (!cancelled) {
+          setTermsTemplates(
+            templates.filter((template) => template.status === 'Active'),
+          )
+          setTermsTemplatesError('')
+        }
+      } catch {
+        if (!cancelled) {
+          setTermsTemplatesError(
+            'Could not load saved terms. Check that the backend is running.',
+          )
+        }
+      }
+    }
+
+    void loadTermsTemplates()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const itemAmount = (item: QuotationItem) =>
     Math.max(0, Number(item.quantity) || 0) *
@@ -304,6 +355,7 @@ function CreateQuotation({
     setQuotationDate(new Date().toISOString().slice(0, 10))
     setValidityDays('30')
     setNotes('')
+    setSelectedTermsTemplateId('')
     setItems([])
     setNextItemId(1)
     setEntry(emptyItem(0))
@@ -386,23 +438,23 @@ function CreateQuotation({
     const quotationItems =
       category === 'Rental'
         ? items.map((item) => ({
-            description: item.equipment,
-            product_code: '',
-            quantity: Number(item.quantity),
-            unit: 'Nos',
-            rate: Number(item.rate),
-            rate_unit: item.rateUnit,
-            duration: Number(item.duration),
-          }))
+          description: item.equipment,
+          product_code: '',
+          quantity: Number(item.quantity),
+          unit: 'Nos',
+          rate: Number(item.rate),
+          rate_unit: item.rateUnit,
+          duration: Number(item.duration),
+        }))
         : [{
-            description: otherItemName.trim(),
-            product_code: '',
-            quantity: Number(otherQuantity),
-            unit: 'Nos',
-            rate: Number(otherUnitPrice),
-            rate_unit: '',
-            duration: 1,
-          }]
+          description: otherItemName.trim(),
+          product_code: '',
+          quantity: Number(otherQuantity),
+          unit: 'Nos',
+          rate: Number(otherUnitPrice),
+          rate_unit: '',
+          duration: 1,
+        }]
 
     const payload = {
       customer_name: customerName.trim(),
@@ -426,6 +478,7 @@ function CreateQuotation({
       discount: 0,
       notes: notes.trim(),
       terms: notes.trim(),
+      terms_template_id: selectedTermsTemplateId || null,
     }
 
     try {
@@ -615,11 +668,10 @@ function CreateQuotation({
                   </p>
                 </div>
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    savedQuotationId
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${savedQuotationId
                       ? 'bg-green-100 text-green-800'
                       : 'bg-amber-100 text-amber-800'
-                  }`}
+                    }`}
                 >
                   {savedQuotationId ? 'Saved' : 'Unsaved draft'}
                 </span>
@@ -956,16 +1008,14 @@ function CreateQuotation({
                             role="radio"
                             aria-checked={active}
                             onClick={() => setCategory(item)}
-                            className={`rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
-                              active
+                            className={`rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${active
                                 ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600'
                                 : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                            }`}
+                              }`}
                           >
                             <span
-                              className={`block text-sm font-semibold ${
-                                active ? 'text-blue-800' : 'text-slate-900'
-                              }`}
+                              className={`block text-sm font-semibold ${active ? 'text-blue-800' : 'text-slate-900'
+                                }`}
                             >
                               {item}
                             </span>
@@ -1001,18 +1051,39 @@ function CreateQuotation({
                     </Field>
 
                     <Field
-                      label="Notes and commercial terms"
-                      htmlFor="notes"
-                      hint="Shown on the quotation PDF."
+                      label="Saved terms template"
+                      htmlFor="termsTemplate"
+                      hint="Optional. Select an Active template to include its saved terms in the quotation PDF."
                       className="sm:col-span-2"
                     >
-                      <Textarea
-                        id="notes"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Payment, delivery, warranty and other terms"
-                        rows={3}
-                      />
+                      <select
+                        id="termsTemplate"
+                        value={selectedTermsTemplateId}
+                        onChange={(event) =>
+                          setSelectedTermsTemplateId(event.target.value)
+                        }
+                        className={selectClass}
+                      >
+                        <option value="">No saved template</option>
+                        {termsTemplates.map((template) => (
+                          <option key={template.template_id} value={template.template_id}>
+                            {template.name} — {template.company}
+                            {template.include_in_pdf ? '' : ' (PDF inclusion disabled)'}
+                          </option>
+                        ))}
+                      </select>
+
+                      {termsTemplatesError && (
+                        <p className="text-sm text-red-600" role="alert">
+                          {termsTemplatesError}
+                        </p>
+                      )}
+
+                      {!termsTemplatesError && termsTemplates.length === 0 && (
+                        <p className="text-xs text-slate-500">
+                          No Active templates available. Create and activate one on the Terms Templates page.
+                        </p>
+                      )}
                     </Field>
                   </div>
                 </CardContent>

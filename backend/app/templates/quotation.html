@@ -93,10 +93,17 @@
       <tr class="grand-total"><td>Grand Total</td><td>{{ total }}</td></tr>
     </table>
 
-    <section class="terms-section">
-      <h3>Terms &amp; Conditions</h3>
-      <div>{{ terms }}</div>
-    </section>
+    
+<section class="terms-section">
+  <h3>Terms &amp; Conditions</h3>
+
+  {% if terms_template_id and notes %}
+  <div style="white-space: pre-line;">{{ notes }}</div>
+  {% endif %}
+
+  <div>{{ terms | safe }}</div>
+</section>
+
 
     <section class="signature-section">
       <div>

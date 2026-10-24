@@ -1,9 +1,11 @@
+
 import base64
 from io import BytesIO
 from pathlib import Path
 
 from fastapi import HTTPException
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
 from playwright.sync_api import sync_playwright
 
 from app.services.quotation_service import get_quotation
@@ -58,6 +60,28 @@ def generate_quotation_pdf(quotation_id: str) -> BytesIO:
             "line_total": format_money(item.get("line_total")),
         })
 
+    # Use the saved snapshot, not the current reusable template.
+    snapshot_content = quotation.get("terms_template_content_html") or ""
+    template_id = quotation.get("terms_template_id") or ""
+    include_template_terms = quotation.get(
+        "terms_template_include_in_pdf",
+        False,
+    )
+
+    if isinstance(include_template_terms, str):
+        include_template_terms = (
+            include_template_terms.strip().lower()
+            in {"true", "1", "yes"}
+        )
+
+    if template_id:
+        terms_html = (
+            snapshot_content if include_template_terms else ""
+        )
+    else:
+        # Backward compatibility for quotations created before templates.
+        terms_html = quotation.get("terms") or ""
+
     context = {
         **quotation,
         "company_address": (
@@ -65,9 +89,13 @@ def generate_quotation_pdf(quotation_id: str) -> BytesIO:
             "Vashi, Navi Mumbai - 400703"
         ),
         "company_contact": "",
-        "subject": f"Offer for {quotation.get('category') or 'products and services'}",
+        "subject": (
+            f"Offer for {quotation.get('category') or 'products and services'}"
+        ),
         "introduction": "Greetings from Airtech Solutions.",
-        "offer_title": f"Offer for {quotation.get('category') or 'products and services'}",
+        "offer_title": (
+            f"Offer for {quotation.get('category') or 'products and services'}"
+        ),
         "customer_company": quotation.get("customer_company") or "",
         "customer_name": quotation.get("customer_name") or "",
         "customer_address": quotation.get("customer_address") or "",
@@ -83,7 +111,7 @@ def generate_quotation_pdf(quotation_id: str) -> BytesIO:
         "total": format_money(quotation.get("total")),
         "tax_percent": quotation.get("tax_percent", 0),
         "tax_type": quotation.get("tax_type") or "GST",
-        "terms": quotation.get("terms") or "",
+        "terms": Markup(terms_html),
         "items": items,
     }
 
@@ -91,17 +119,21 @@ def generate_quotation_pdf(quotation_id: str) -> BytesIO:
         template = templates.get_template("quotation.html")
         html = template.render(**context)
 
-        # Inline the stylesheet
+        # Inline the stylesheet without changing the PDF layout.
         if CSS_FILE.exists():
             css = CSS_FILE.read_text(encoding="utf-8")
             style_tag = f"<style>\n{css}\n</style>"
 
             if "</head>" in html:
-                html = html.replace("</head>", f"{style_tag}\n</head>", 1)
+                html = html.replace(
+                    "</head>",
+                    f"{style_tag}\n</head>",
+                    1,
+                )
             else:
                 html = f"{style_tag}\n{html}"
 
-        # Inline the letterhead images (logo + address strip)
+        # Inline the letterhead images.
         html = embed_images(html)
 
         with sync_playwright() as playwright:
@@ -110,8 +142,6 @@ def generate_quotation_pdf(quotation_id: str) -> BytesIO:
                 page = browser.new_page()
                 page.set_content(html, wait_until="load")
 
-                # Page margins are zero: the template handles its own
-                # spacing around the letterhead.
                 pdf_bytes = page.pdf(
                     format="A4",
                     print_background=True,

@@ -45,6 +45,10 @@ SHEETS = {
         "maintenance_coverage",
         "notes",
         "terms",
+        "terms_template_id",
+        "terms_template_name",
+        "terms_template_content_html",
+        "terms_template_include_in_pdf",
     ],
     "QuotationItems": [
         "quotation_id",
@@ -223,3 +227,59 @@ def append_record(
         workbook.close()
 
     return saved_record
+
+
+def delete_quotation_records(quotation_id: str) -> bool:
+    """Delete a quotation and its associated line items from Excel."""
+    ensure_workbook()
+    workbook = load_workbook(EXCEL_FILE)
+
+    try:
+        quotations_sheet = workbook["Quotations"]
+        items_sheet = workbook["QuotationItems"]
+
+        quotation_headers = [
+            cell.value for cell in quotations_sheet[1]
+        ]
+        item_headers = [
+            cell.value for cell in items_sheet[1]
+        ]
+
+        quotation_id_col = quotation_headers.index("quotation_id") + 1
+        item_id_col = item_headers.index("quotation_id") + 1
+
+        # Find the quotation row by its exact ID.
+        quotation_row = next(
+            (
+                row
+                for row in range(2, quotations_sheet.max_row + 1)
+                if str(
+                    quotations_sheet.cell(
+                        row=row,
+                        column=quotation_id_col,
+                    ).value or ""
+                ) == quotation_id
+            ),
+            None,
+        )
+
+        if quotation_row is None:
+            return False
+
+        # Delete associated line items from bottom to top.
+        for row in range(items_sheet.max_row, 1, -1):
+            stored_id = str(
+                items_sheet.cell(
+                    row=row,
+                    column=item_id_col,
+                ).value or ""
+            )
+
+            if stored_id == quotation_id:
+                items_sheet.delete_rows(row, 1)
+
+        quotations_sheet.delete_rows(quotation_row, 1)
+        workbook.save(EXCEL_FILE)
+        return True
+    finally:
+        workbook.close()

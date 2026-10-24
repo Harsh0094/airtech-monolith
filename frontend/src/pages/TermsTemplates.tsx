@@ -1,5 +1,6 @@
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import mammoth from 'mammoth'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Table } from '@tiptap/extension-table'
@@ -16,6 +17,7 @@ import {
   Plus,
   Save,
   FileText,
+  FileUp,
   LoaderCircle,
 } from 'lucide-react'
 
@@ -43,6 +45,8 @@ export default function TermsTemplates() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const editor = useEditor({
     extensions: [
@@ -110,6 +114,66 @@ export default function TermsTemplates() {
     setIncludeInPdf(selected.include_in_pdf ?? true)
     editor?.commands.setContent(selected.content_html || '<p></p>')
     setMessage('')
+  }
+
+
+  async function importWordDocument(file?: File) {
+    if (!file || !editor) return
+
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      setMessage('Please select a Word .docx file.')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    setImporting(true)
+    setMessage('Importing Word document…')
+
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const result = await mammoth.convertToHtml({ arrayBuffer })
+      const importedHtml = result.value.trim()
+
+      if (!importedHtml || importedHtml === '<p></p>') {
+        throw new Error('No readable content was found.')
+      }
+
+      const sourceTableCount =
+        (importedHtml.match(/<table\b/gi) || []).length
+
+      if (sourceTableCount > 0) {
+        // Insert Word HTML so Tiptap can parse its table elements.
+        editor.commands.setContent(importedHtml)
+
+        const savedHtml = editor.getHTML()
+        const editorTableCount =
+          (savedHtml.match(/<table\b/gi) || []).length
+
+        if (editorTableCount === 0) {
+          throw new Error(
+            'Word contains a table, but the editor could not preserve it. Check the Tiptap table extensions.'
+          )
+        }
+
+        setMessage(
+          `Imported successfully: ${sourceTableCount} table(s) detected and preserved. Review the formatting before saving.`
+        )
+      } else {
+        editor.commands.setContent(importedHtml)
+        setMessage(
+          'Text imported, but no real Word tables were detected in the converted content.'
+        )
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? `Import failed: ${error.message}`
+          : 'Import failed. Please try another Word document.'
+      )
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   async function saveTemplate() {
@@ -195,14 +259,32 @@ export default function TermsTemplates() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={startNewTemplate}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-        >
-          <Plus size={17} />
-          New template
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            className="hidden"
+            onChange={(event) => void importWordDocument(event.target.files?.[0])}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-60"
+          >
+            {importing ? <LoaderCircle size={17} className="animate-spin" /> : <FileUp size={17} />}
+            {importing ? 'Importing…' : 'Import Word (.docx)'}
+          </button>
+          <button
+            type="button"
+            onClick={startNewTemplate}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            <Plus size={17} />
+            New template
+          </button>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -213,7 +295,7 @@ export default function TermsTemplates() {
           <div>
             <h2 className="font-semibold text-[#142d4e]">Template editor</h2>
             <p className="text-sm text-slate-500">
-              Format clauses and insert editable tables.
+              Import a Word .docx file or edit clauses and tables below. Import replaces the current editor content.
             </p>
           </div>
         </div>

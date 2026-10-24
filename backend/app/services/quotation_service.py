@@ -5,9 +5,11 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from app.db.excel_storage import append_record, read_records
-
-
+from app.db.excel_storage import (
+    append_record,
+    read_records,
+    delete_quotation_records,
+)
 CENT = Decimal("0.01")
 
 
@@ -43,6 +45,73 @@ def create_quotation(payload: dict) -> dict:
             detail="Invalid quotation category.",
         )
 
+    # Resolve the selected terms template and take a snapshot.
+    terms_template_id = str(
+        payload.get("terms_template_id") or ""
+    ).strip()
+
+    terms_template = None
+
+    if terms_template_id:
+        terms_template = next(
+            (
+                template
+                for template in read_records("TermsTemplates")
+                if str(template.get("template_id")) == terms_template_id
+            ),
+            None,
+        )
+
+        if terms_template is None:
+            raise HTTPException(
+                status_code=422,
+                detail="The selected terms template was not found.",
+            )
+
+        if str(terms_template.get("status", "")).strip() != "Active":
+            raise HTTPException(
+                status_code=422,
+                detail="Only Active terms templates can be selected.",
+            )
+
+    template_include_value = (
+        terms_template.get("include_in_pdf", True)
+        if terms_template
+        else False
+    )
+
+    if isinstance(template_include_value, bool):
+        template_include_in_pdf = template_include_value
+    else:
+        template_include_in_pdf = (
+            str(template_include_value).strip().lower()
+            in {"true", "1", "yes"}
+        )
+
+    terms_template_name = (
+        str(terms_template.get("name") or "")
+        if terms_template
+        else ""
+    )
+
+    terms_template_content_html = (
+        str(terms_template.get("content_html") or "")
+        if terms_template
+        else ""
+    )
+
+    # Preserve legacy terms when no template is selected.
+    # When a template is selected, use its snapshot only if PDF inclusion
+    # is enabled. The manual notes field remains separate.
+    if terms_template:
+        saved_terms = (
+            terms_template_content_html
+            if template_include_in_pdf
+            else ""
+        )
+    else:
+        saved_terms = str(payload.get("terms") or "")
+
     prepared_items = []
     subtotal = Decimal("0.00")
 
@@ -74,7 +143,10 @@ def create_quotation(payload: dict) -> dict:
         ):
             raise HTTPException(
                 status_code=422,
-                detail="Quantity and duration must be positive; rate cannot be negative.",
+                detail=(
+                    "Quantity and duration must be positive; "
+                    "rate cannot be negative."
+                ),
             )
 
         line_total = money(quantity * rate * duration)
@@ -111,7 +183,10 @@ def create_quotation(payload: dict) -> dict:
     ):
         raise HTTPException(
             status_code=422,
-            detail="Tax must be between 0 and 100; discount must not exceed subtotal.",
+            detail=(
+                "Tax must be between 0 and 100; "
+                "discount must not exceed subtotal."
+            ),
         )
 
     tax_amount = money((subtotal - discount) * tax_percent / 100)
@@ -146,7 +221,11 @@ def create_quotation(payload: dict) -> dict:
         "contract_months": int(payload.get("contract_months", 12)),
         "maintenance_coverage": payload.get("maintenance_coverage", ""),
         "notes": payload.get("notes", ""),
-        "terms": payload.get("terms", ""),
+        "terms": saved_terms,
+        "terms_template_id": terms_template_id,
+        "terms_template_name": terms_template_name,
+        "terms_template_content_html": terms_template_content_html,
+        "terms_template_include_in_pdf": template_include_in_pdf,
     }
 
     # Save the quotation, then its items.
@@ -169,14 +248,14 @@ def create_quotation(payload: dict) -> dict:
     }
 
 
-
 def get_quotation(quotation_id: str) -> dict:
     """Retrieve one quotation and its items from Excel."""
     quotations = read_records("Quotations")
 
     quotation = next(
         (
-            row for row in quotations
+            row
+            for row in quotations
             if str(row.get("quotation_id")) == quotation_id
         ),
         None,
@@ -196,13 +275,21 @@ def get_quotation(quotation_id: str) -> dict:
 
     items = [
         {
-            "description": item.get("description") or item.get("item_description") or "",
+            "description": (
+                item.get("description")
+                or item.get("item_description")
+                or ""
+            ),
             "product_code": item.get("product_code") or "",
             "quantity": item.get("quantity") or 0,
             "unit": item.get("unit") or "Nos",
             "rate": item.get("rate") or 0,
             "rate_unit": item.get("rate_unit") or "",
-            "duration": item.get("duration") or item.get("duration_months") or 1,
+            "duration": (
+                item.get("duration")
+                or item.get("duration_months")
+                or 1
+            ),
             "line_total": item.get("line_total") or 0,
         }
         for item in stored_items
@@ -214,6 +301,7 @@ def get_quotation(quotation_id: str) -> dict:
         "items": items,
     }
 
+
 def list_quotations() -> list[dict]:
     """List quotations stored in Excel."""
     return [
@@ -223,3 +311,18 @@ def list_quotations() -> list[dict]:
         }
         for quotation in read_records("Quotations")
     ]
+
+
+def delete_quotation(quotation_id: str) -> dict:
+    deleted = delete_quotation_records(quotation_id)
+
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail="Quotation not found.",
+        )
+
+    return {
+        "message": "Quotation deleted successfully.",
+        "quotation_id": quotation_id,
+    }
