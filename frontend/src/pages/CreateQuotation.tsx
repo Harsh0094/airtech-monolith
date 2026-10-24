@@ -58,6 +58,13 @@ const money = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value)
 
+const prettyDate = (value: string) => {
+  const date = new Date(`${value}T00:00:00`)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
 const emptyItem = (id: number): QuotationItem => ({
   id,
   equipment: '',
@@ -230,7 +237,6 @@ function CreateQuotation({
   const [frequencyDetails, setFrequencyDetails] = useState('')
   const [contractMonths, setContractMonths] = useState('12')
   const [maintenanceCoverage, setMaintenanceCoverage] = useState('')
-
 
   useEffect(() => {
     let cancelled = false
@@ -438,23 +444,23 @@ function CreateQuotation({
     const quotationItems =
       category === 'Rental'
         ? items.map((item) => ({
-          description: item.equipment,
-          product_code: '',
-          quantity: Number(item.quantity),
-          unit: 'Nos',
-          rate: Number(item.rate),
-          rate_unit: item.rateUnit,
-          duration: Number(item.duration),
-        }))
+            description: item.equipment,
+            product_code: '',
+            quantity: Number(item.quantity),
+            unit: 'Nos',
+            rate: Number(item.rate),
+            rate_unit: item.rateUnit,
+            duration: Number(item.duration),
+          }))
         : [{
-          description: otherItemName.trim(),
-          product_code: '',
-          quantity: Number(otherQuantity),
-          unit: 'Nos',
-          rate: Number(otherUnitPrice),
-          rate_unit: '',
-          duration: 1,
-        }]
+            description: otherItemName.trim(),
+            product_code: '',
+            quantity: Number(otherQuantity),
+            unit: 'Nos',
+            rate: Number(otherUnitPrice),
+            rate_unit: '',
+            duration: 1,
+          }]
 
     const payload = {
       customer_name: customerName.trim(),
@@ -668,10 +674,11 @@ function CreateQuotation({
                   </p>
                 </div>
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${savedQuotationId
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    savedQuotationId
                       ? 'bg-green-100 text-green-800'
                       : 'bg-amber-100 text-amber-800'
-                    }`}
+                  }`}
                 >
                   {savedQuotationId ? 'Saved' : 'Unsaved draft'}
                 </span>
@@ -729,7 +736,7 @@ function CreateQuotation({
                     </p>
                   </ReviewField>
                   <ReviewField label="Date and validity">
-                    <p>{quotationDate}</p>
+                    <p>{prettyDate(quotationDate)}</p>
                     <p className="text-slate-500">Valid for {validityDays} days</p>
                   </ReviewField>
                 </div>
@@ -838,13 +845,23 @@ function CreateQuotation({
               </div>
 
               <div className="sticky bottom-0 -mx-6 -mb-6 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-6 py-4 backdrop-blur">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowReview(false)}
-                >
-                  Back to edit
-                </Button>
+                {savedQuotationId ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetForm}
+                  >
+                    Start a new quotation
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowReview(false)}
+                  >
+                    Back to edit
+                  </Button>
+                )}
                 {!savedQuotationId ? (
                   <Button type="button" onClick={saveQuotation} disabled={isSaving}>
                     {isSaving ? 'Saving quotation…' : 'Save quotation to Excel'}
@@ -874,7 +891,7 @@ function CreateQuotation({
             </CardContent>
           </Card>
         ) : (
-          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="grid items-start gap-6 pb-20 lg:grid-cols-[minmax(0,1fr)_340px] lg:pb-0">
             <form
               id="quotation-form"
               onSubmit={handleSubmit}
@@ -1008,14 +1025,16 @@ function CreateQuotation({
                             role="radio"
                             aria-checked={active}
                             onClick={() => setCategory(item)}
-                            className={`rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${active
+                            className={`rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
+                              active
                                 ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600'
                                 : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                              }`}
+                            }`}
                           >
                             <span
-                              className={`block text-sm font-semibold ${active ? 'text-blue-800' : 'text-slate-900'
-                                }`}
+                              className={`block text-sm font-semibold ${
+                                active ? 'text-blue-800' : 'text-slate-900'
+                              }`}
                             >
                               {item}
                             </span>
@@ -1049,7 +1068,6 @@ function CreateQuotation({
                         required
                       />
                     </Field>
-
                     <Field
                       label="Saved terms template"
                       htmlFor="termsTemplate"
@@ -1508,6 +1526,20 @@ function CreateQuotation({
                 </CardContent>
               </Card>
             </aside>
+
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur lg:hidden">
+              <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs text-slate-500">Grand total</p>
+                  <p className="text-lg font-bold tabular-nums text-blue-700">
+                    {money(grandTotal)}
+                  </p>
+                </div>
+                <Button type="submit" form="quotation-form">
+                  Review quotation
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react'
 import {
   LayoutDashboard,
@@ -13,6 +12,7 @@ import {
   ChevronDown,
   FilePlus2,
   Files,
+  ScrollText,
   PanelLeftClose,
   PanelLeftOpen,
   Bell,
@@ -33,7 +33,7 @@ const navigation = [
   { label: 'Service & Maintenance', icon: Wrench },
   { label: 'Orders', icon: ClipboardList },
   { label: 'Reports', icon: BarChart3 },
-  { label: 'Terms & Conditions', icon: FileText },
+  { label: 'Terms & Conditions', icon: ScrollText },
   { label: 'Settings', icon: Settings },
 ]
 
@@ -398,9 +398,11 @@ function AppLayout() {
               <Menu size={20} />
             </button>
 
-            <p className="truncate text-base font-semibold text-[#142d4e]">
-              {activePage}
-            </p>
+            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
+              <span className="hidden text-slate-400 sm:inline">Airtech</span>
+              <span aria-hidden="true" className="hidden text-slate-300 sm:inline">/</span>
+              <span className="truncate font-medium text-slate-700">{activePage}</span>
+            </nav>
           </div>
 
           <div className="flex shrink-0 items-center gap-3 sm:gap-4">
